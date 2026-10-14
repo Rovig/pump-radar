@@ -1,0 +1,9 @@
+{
+  "name": "essence-widget",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node core/main.mjs",
+    "test": "node --test \"core/test/*.test.mjs\""
+  }
+}

@@ -1,0 +1,17 @@
+#!/bin/sh
+# Lanceur du widget : Übersicht n'a qu'un PATH minimal (pas de nvm), on cherche node soi-même.
+# Ordre : nvm (version la plus récente) → Homebrew → /usr/local, en ignorant node < 18 (pas de fetch).
+# Arguments transmis à core/main.mjs.
+dir=$(cd "$(dirname "$0")/.." && pwd)
+
+node=
+for n in $(ls -d "$HOME"/.nvm/versions/node/v*/bin/node 2>/dev/null | sort -V -r) /opt/homebrew/bin/node /usr/local/bin/node; do
+  [ -x "$n" ] && "$n" -e 'process.exit(+process.versions.node.split(".")[0] < 18 ? 1 : 0)' 2>/dev/null && { node=$n; break; }
+done
+
+if [ -z "$node" ]; then
+  printf '{"generatedAt":"%s","error":"node >= 18 introuvable (nvm, Homebrew ou /usr/local)"}' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  exit 0
+fi
+
+exec "$node" "$dir/core/main.mjs" "$@"

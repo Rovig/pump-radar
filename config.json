@@ -1,0 +1,10 @@
+{
+  "mode": "nearby",
+  "location": { "provider": "fixed", "lat": 48.8566, "lon": 2.3522 },
+  "radiusKm": 5,
+  "limit": 8,
+  "searchLimit": 20,
+  "ids": [75013025, 75001003],
+  "fuels": ["SP98", "E10"],
+  "map": { "zoom": 15, "width": 360, "height": 220 }
+}

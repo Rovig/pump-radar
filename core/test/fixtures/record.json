@@ -1,0 +1,34 @@
+{
+    "total_count": 2,
+    "results": [
+        {
+            "id": 75012010,
+            "adresse": "36 Quai de la Rap\u00e9e",
+            "ville": "Paris",
+            "cp": "75012",
+            "geom": {
+                "lon": 2.373,
+                "lat": 48.842
+            },
+            "carburants_disponibles": [
+                "Gazole",
+                "E10",
+                "SP98"
+            ],
+            "carburants_rupture_temporaire": "E85;GPLc",
+            "gazole_prix": 2.361,
+            "gazole_maj": "2026-10-13T07:31:00+00:00",
+            "sp95_prix": null,
+            "sp95_maj": null,
+            "sp98_prix": 2.353,
+            "sp98_maj": "2026-10-13T07:31:00+00:00",
+            "e10_prix": 2.217,
+            "e10_maj": "2026-10-13T07:31:00+00:00",
+            "e85_prix": null,
+            "e85_maj": null,
+            "gplc_prix": null,
+            "gplc_maj": null,
+            "d": 2225.2944934935335
+        }
+    ]
+}
