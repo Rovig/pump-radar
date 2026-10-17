@@ -82,39 +82,98 @@ const Row = ({ s }) => (
   </div>
 );
 
-// --- Menu burger + recherche (ID de station ou code postal) ---
+// --- Menu burger + recherche (ville, code postal ou ID de station) ---
 
-export const initialState = { output: '', error: null, menu: false, searching: false, query: '', search: null };
+export const initialState = {
+  output: '', error: null, menu: false, searching: false, query: '', search: null,
+  suggest: null, // { query, items, index, error } : suggestions de communes pour la saisie en cours
+};
 
 export const updateState = (event, prev) => {
   switch (event.type) {
     case 'UB/COMMAND_RAN': return { ...prev, output: event.output, error: event.error };
     case 'MENU_TOGGLE': return { ...prev, menu: !prev.menu };
     case 'SEARCH_OPEN': return { ...prev, menu: false, searching: true };
-    case 'SEARCH_CLOSE': return { ...prev, menu: false, searching: false, query: '', search: null };
-    case 'QUERY': return { ...prev, query: event.query };
+    case 'SEARCH_CLOSE': return { ...prev, menu: false, searching: false, query: '', search: null, suggest: null };
+    case 'QUERY': return { ...prev, query: event.query, suggest: isDigits(event.query) ? null : prev.suggest };
     case 'SEARCH_START':
-      return { ...prev, search: { query: event.query, output: prev.search?.output ?? null, loading: true } };
+      return {
+        ...prev,
+        suggest: null,
+        search: { query: event.query, label: event.label, output: prev.search?.output ?? null, loading: true },
+      };
     case 'SEARCH_DONE':
       // Ignore une réponse arrivée après une nouvelle recherche ou une fermeture.
       return prev.search?.query === event.query
         ? { ...prev, search: { ...prev.search, output: event.output, loading: false } }
         : prev;
+    case 'SUGGEST_DONE': {
+      // Ignore une réponse pour une saisie déjà modifiée.
+      if (shellText(prev.query) !== event.query) return prev;
+      const r = parse(event.output);
+      return { ...prev, suggest: { query: event.query, items: r?.suggestions ?? [], index: 0, error: r ? r.error : 'réponse illisible' } };
+    }
+    case 'SUGGEST_MOVE': {
+      if (!prev.suggest?.items.length) return prev;
+      const n = prev.suggest.items.length;
+      return { ...prev, suggest: { ...prev.suggest, index: (prev.suggest.index + event.delta + n) % n } };
+    }
+    case 'SUGGEST_CLEAR': return { ...prev, suggest: null };
     default: return prev;
   }
 };
 
-// Seuls les chiffres passent : la saisie est ensuite injectée dans une commande shell.
-const digits = (text) => text.replace(/\D/g, '');
+const isDigits = (text) => /^\d+$/.test(text);
 
-const submitSearch = (query, dispatch) => {
+// La saisie finit dans une commande shell : chiffres seuls (CP / ID), ou lettres, espaces et tirets
+// entre guillemets simples (l'apostrophe est remplacée, elle ne peut donc pas fermer les guillemets).
+const cleanInput = (text) => {
+  const t = text.replace(/[^\p{L}\d '’-]/gu, '');
+  return isDigits(t.replace(/\s/g, '')) ? t.replace(/\D/g, '').slice(0, 9) : t.slice(0, 40);
+};
+const shellText = (text) => text.replace(/['’]/g, ' ').replace(/[^\p{L} -]/gu, '').trim();
+
+const SUGGEST_DELAY_MS = 250;
+let suggestTimer = null;
+
+const typeQuery = (raw, dispatch) => {
+  const query = cleanInput(raw);
+  dispatch({ type: 'QUERY', query });
+  clearTimeout(suggestTimer);
+  const text = shellText(query);
+  if (isDigits(query) || text.replace(/[ -]/g, '').length < 2) return dispatch({ type: 'SUGGEST_CLEAR' });
+  suggestTimer = setTimeout(() => {
+    run(`${CMD} suggest '${text}'`)
+      .catch((err) => JSON.stringify({ query: text, error: String(err) }))
+      .then((output) => dispatch({ type: 'SUGGEST_DONE', query: text, output }));
+  }, SUGGEST_DELAY_MS);
+};
+
+const searchLabel = (q) => (q.length === 5 ? `CP ${q}` : `ID ${q}`);
+
+const submitSearch = (query, label, dispatch) => {
   if (!query) return;
+  clearTimeout(suggestTimer);
   activeSearch = query;
-  dispatch({ type: 'SEARCH_START', query });
+  dispatch({ type: 'SEARCH_START', query, label });
   fetchSearch(query, dispatch);
 };
 
+// Seules les coordonnées (nombres) partent dans la commande, jamais le nom de la commune.
+const chooseCommune = (c, dispatch) => {
+  dispatch({ type: 'QUERY', query: c.name });
+  submitSearch(`@${Number(c.lat).toFixed(5)},${Number(c.lon).toFixed(5)}`, c.name, dispatch);
+};
+
+const submitQuery = (state, dispatch) => {
+  const { query, suggest } = state;
+  if (isDigits(query)) return submitSearch(query, searchLabel(query), dispatch);
+  const picked = suggest?.items[suggest.index];
+  if (picked) chooseCommune(picked, dispatch);
+};
+
 const closeSearch = (dispatch) => {
+  clearTimeout(suggestTimer);
   activeSearch = null;
   dispatch({ type: 'SEARCH_CLOSE' });
 };
@@ -127,7 +186,7 @@ const Menu = ({ state, dispatch }) => (
   <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', padding: '4px 0' }}>
     <button style={{ ...button, display: 'block', width: '100%', textAlign: 'left', padding: '6px 12px' }}
       onClick={() => dispatch({ type: 'SEARCH_OPEN' })}>
-      🔍 Rechercher une station ou un code postal
+      🔍 Rechercher une ville, un code postal ou une station
     </button>
     {state.searching && (
       <button style={{ ...button, display: 'block', width: '100%', textAlign: 'left', padding: '6px 12px' }}
@@ -138,17 +197,51 @@ const Menu = ({ state, dispatch }) => (
   </div>
 );
 
+const KEYS = { ArrowDown: 1, ArrowUp: -1 };
+
+const onKeyDown = (e, dispatch) => {
+  if (e.key in KEYS) {
+    e.preventDefault();
+    dispatch({ type: 'SUGGEST_MOVE', delta: KEYS[e.key] });
+  } else if (e.key === 'Escape') dispatch({ type: 'SUGGEST_CLEAR' });
+};
+
+const Suggestions = ({ suggest, dispatch }) => {
+  if (suggest.error) return <div style={{ padding: '4px 12px 6px', opacity: 0.5 }}>suggestions indisponibles</div>;
+  if (!suggest.items.length) return <div style={{ padding: '4px 12px 6px', opacity: 0.5 }}>aucune commune trouvée</div>;
+  return (
+    <div style={{ paddingBottom: 4 }}>
+      {suggest.items.map((c, i) => (
+        <button
+          key={c.insee}
+          style={{
+            ...button, display: 'flex', justifyContent: 'space-between', gap: 8, width: '100%', textAlign: 'left',
+            padding: '4px 12px', background: i === suggest.index ? 'rgba(255,255,255,0.12)' : 'none',
+          }}
+          onMouseEnter={() => dispatch({ type: 'SUGGEST_MOVE', delta: i - suggest.index })}
+          onClick={() => chooseCommune(c, dispatch)}
+        >
+          <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name}</span>
+          <span style={{ opacity: 0.6, whiteSpace: 'nowrap' }}>
+            {c.postcodes[0]}{c.postcodes.length > 1 ? '…' : ''} · {c.dept}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+};
+
 const SearchBar = ({ state, dispatch }) => (
   <form
     style={{ display: 'flex', gap: 6, padding: '6px 12px', borderTop: '1px solid rgba(255,255,255,0.08)' }}
-    onSubmit={(e) => { e.preventDefault(); submitSearch(state.query, dispatch); }}
+    onSubmit={(e) => { e.preventDefault(); submitQuery(state, dispatch); }}
   >
     <input
       autoFocus
-      inputMode="numeric"
-      placeholder="ID station (75013025) ou code postal (75013)"
+      placeholder="Ville, code postal ou ID de station"
       value={state.query}
-      onChange={(e) => dispatch({ type: 'QUERY', query: digits(e.target.value).slice(0, 9) })}
+      onChange={(e) => typeQuery(e.target.value, dispatch)}
+      onKeyDown={(e) => onKeyDown(e, dispatch)}
       style={{
         flex: 1, font: 'inherit', color: 'inherit', background: 'rgba(255,255,255,0.1)',
         border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, padding: '4px 8px', outline: 'none',
@@ -170,8 +263,6 @@ const Header = ({ text, dispatch }) => (
     <span style={{ fontWeight: 400, opacity: 0.6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{text}</span>
   </div>
 );
-
-const searchLabel = (q) => (q.length === 5 ? `CP ${q}` : `ID ${q}`);
 
 const parse = (output) => {
   try {
@@ -220,7 +311,7 @@ const Body = ({ vm }) => (
 
 export const render = (state, dispatch) => {
   const { search } = state;
-  const prefix = search ? `${searchLabel(search.query)} · ` : '';
+  const prefix = search ? `${search.label} · ` : '';
   const loading = search ? search.loading : !state.output && !state.error;
   // Pendant une recherche, le résultat précédent (ou le tableau de bord) reste visible sous le loader.
   const vm = parse(search?.output ?? state.output);
@@ -236,6 +327,7 @@ export const render = (state, dispatch) => {
       <Header text={text} dispatch={dispatch} />
       {state.menu && <Menu state={state} dispatch={dispatch} />}
       {state.searching && <SearchBar state={state} dispatch={dispatch} />}
+      {state.searching && state.suggest && <Suggestions suggest={state.suggest} dispatch={dispatch} />}
       <div style={{ position: 'relative', minHeight: loading ? 140 : 0 }}>
         {vm && !vm.error && <Body vm={vm} />}
         {loading && <Loader text={search ? 'Recherche en cours…' : 'Chargement des stations…'} />}

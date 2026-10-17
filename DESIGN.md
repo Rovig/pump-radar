@@ -271,7 +271,7 @@ Développement dans `~/essence`, puis symlink vers le dossier widgets d'Übersic
 ```sh
 brew install --cask ubersicht
 ln -s ~/essence "$HOME/Library/Application Support/Übersicht/widgets/essence.widget"
-npm test          # 19 tests, node --test
+npm test          # 27 tests, node --test
 npm start         # ViewModel JSON brut (debug)
 npm start -- 75013   # idem pour une recherche (code postal ou ID de station)
 ```
@@ -282,9 +282,128 @@ npm start -- 75013   # idem pour une recherche (code postal ou ID de station)
 - `ignTiles` : lat/lon → (x, y, pixel) sur points connus ; marqueur au centre = centre du cadre.
 - `prixCarburantsApi` : mapping d'un enregistrement réel figé en fixture JSON.
 - `buildDashboard` : faux `StationSource` / `LocationProvider`, modes `nearby`, `ids` et `postcode`.
-- `parseSearch` : saisie → code postal / ID / refus.
+- `parseSearch` : saisie → code postal / ID / `@lat,lon` / refus.
+- `suggestCommunes`, `geoApiCommunes` : voir §13.8.
 
 ## 12. Hors périmètre v1 (YAGNI)
 
 Notifications de retour en stock, historique des prix, carte interactive, widget WidgetKit
 natif. Chacun s'ajoute plus tard par un adapter ou un nouveau rendu, sans toucher au cœur.
+
+---
+
+## 13. Recherche assistée de ville (implémentée le 17/10/2026)
+
+**Besoin** : dans la barre de recherche, taper `iss` propose *Issy-les-Moulineaux* ; un clic
+(ou Entrée) affiche les stations de cette commune. Les recherches par code postal et par ID
+de station restent inchangées.
+
+### 13.1 Faits vérifiés (17/10/2026)
+
+| Source | Requête | Constat |
+|---|---|---|
+| API Découpage administratif (geo.api.gouv.fr) | `GET /communes?nom=iss&fields=nom,code,codesPostaux,codeDepartement,centre,population&boost=population&limit=15` | Sans clé, CORS ouvert, ~0,3 s. Recherche floue, accents tolérés (`saint-e` → Saint-Étienne). |
+| ↳ classement | `nom=iss` | Renvoie **Issou** (4 060 hab.) avant **Issy-les-Moulineaux** (67 669) : `boost=population` ne suffit pas → on reclasse nous-mêmes. |
+| ↳ position | `centre: { coordinates: [lon, lat] }` | GeoJSON : longitude d'abord (même piège que le WKT de l'API carburants). |
+| Prix carburants | `where=cp="92130"` | `ville` est propre pour Issy, mais le champ est saisi par les stations, souvent irrégulier → **on ne cherche pas sur `ville`**. |
+
+### 13.2 Choix
+
+| Question | Retenu | Écarté (pourquoi) |
+|---|---|---|
+| Source des communes | **geo.api.gouv.fr** | Champ `ville` du dataset carburants : orthographes incohérentes, pas de population pour classer. Liste embarquée (~35 000 communes) : à maintenir, alourdit le dépôt. |
+| Où appeler l'API | **Dans `core/`** (`essence suggest <texte>`) | `fetch` direct depuis le JSX : marche (CORS OK) mais casse la règle « le JSX ne fait qu'afficher » et n'est pas testable. Démarrer node coûte ~50 ms par frappe, ce qui reste négligeable avec un debounce de 250 ms. |
+| Stations d'une commune | **Mode `nearby` centré sur `centre`** (rayon `radiusKm`) | `cp in (...)` : Paris et Marseille ont des dizaines de CP, et un CP est souvent partagé entre plusieurs communes (78440 = Issou + 5 autres). Les villages sans station ne renverraient rien. `nearby` existe déjà : **aucune nouvelle méthode** dans `StationSource`. |
+
+### 13.3 Classement des suggestions (`rankCommunes`, pur)
+
+1. Normaliser : minuscules, sans accents (`NFD` puis suppression des diacritiques), `-` et `'` → espace.
+2. D'abord les communes dont le **nom normalisé commence par** la saisie, triées par
+   **population décroissante** ; ensuite les autres, dans l'ordre de l'API.
+3. Garder les 6 premières.
+
+`iss` → Issy-les-Moulineaux, Issou, Issus… · `mars` → Marseille… · `saint e` → Saint-Étienne…
+
+### 13.4 Contrats
+
+```js
+// Port : CommuneSource
+suggest(text: string, limit: number) → Promise<Commune[]>
+
+// Commune (domaine)
+{ name: 'Issy-les-Moulineaux', insee: '92040', postcodes: ['92130'], dept: '92',
+  lat: 48.824, lon: 2.2628, population: 67669 }
+```
+
+**Nouvelle sous-commande** de `core/main.mjs` (la recherche existante reste l'argument nu) :
+
+```sh
+essence suggest 'iss'      # → {"query":"iss","suggestions":[Commune, …]}  ou  {"query":"iss","error":"…"}
+essence @48.824,2.2628     # → ViewModel habituel, mode nearby centré sur ce point
+```
+
+`parseSearch` gagne une forme : `@<lat>,<lon>` → `{ mode: 'nearby', location: { provider: 'fixed', lat, lon } }`.
+Le widget envoie ces coordonnées, et non le nom : la recherche rafraîchie toutes les 10 min
+ne refait donc aucun géocodage, et le nom n'a jamais besoin d'entrer dans une commande shell.
+
+### 13.5 Sécurité shell
+
+`run()` d'Übersicht exécute une **chaîne shell**. Aujourd'hui seuls des chiffres y passent ;
+avec des lettres :
+
+- côté JSX, on garde seulement `[\p{L} -]` (`'` → espace), 40 caractères au plus ;
+- on entoure le texte de **guillemets simples** : `essence suggest 'saint etienne'`. Comme `'`
+  est filtré, rien ne peut sortir des guillemets ;
+- `@lat,lon` est construit à partir de nombres (`Number(...).toFixed(5)`), jamais à partir de la saisie.
+
+### 13.6 Interface (`index.jsx`)
+
+```
+┌──────────────────────────────────────────────┐
+│ ☰ ⛽ Essence        Issy-les-Moulineaux · MAJ │
+├──────────────────────────────────────────────┤
+│ [ iss▌                              ] OK  ✕  │
+│ ▸ Issy-les-Moulineaux        92130 · 92      │  ← surlignée (↑/↓)
+│   Issou                      78440 · 78      │
+│   Issus                      31450 · 31      │
+└──────────────────────────────────────────────┘
+```
+
+- Placeholder : `Ville, code postal ou ID de station` ; on retire `inputMode="numeric"`.
+- **Que des chiffres** → comportement actuel, pas de suggestions.
+- **Au moins 2 lettres** → `suggest` après **250 ms** sans frappe. Chaque réponse porte sa
+  `query`, et toute réponse qui ne correspond plus à la saisie est ignorée (même garde que `SEARCH_DONE`).
+- Clavier : ↑/↓ déplacent la sélection, **Entrée** choisit la ligne surlignée (la première
+  par défaut), **Échap** ferme la liste. Un clic choisit aussi.
+- Choisir une commune lance `submitSearch('@lat,lon', …)` avec le libellé `name`, affiché dans
+  l'en-tête à la place de `CP …` / `ID …` (`searchLabel` reçoit le libellé au lieu de le déduire).
+- Si l'API des communes échoue, la liste n'apparaît pas et une ligne grisée indique
+  « suggestions indisponibles ». Les recherches CP et ID marchent toujours.
+
+Nouveaux états : `suggest: { query, items, index } | null` ; événements `SUGGEST_DONE`,
+`SUGGEST_MOVE`, `SUGGEST_CLEAR`. `search` gagne `label`.
+
+### 13.7 Fichiers
+
+```
+core/adapters/geoApiCommunes.mjs   CommuneSource (fetch + mapping GeoJSON → Commune, timeout 5 s)
+core/app/suggestCommunes.mjs       normalize + rankCommunes + suggestCommunes(text, { communes })
+core/app/parseSearch.mjs           + forme @lat,lon
+core/main.mjs                      + sous-commande « suggest »
+index.jsx                          liste de suggestions, debounce, clavier, libellé
+core/test/fixtures/communes-iss.json  réponse réelle figée
+```
+
+### 13.8 Tests
+
+- `rankCommunes` : `iss` → Issy en premier malgré l'ordre de l'API ; accents et tirets
+  (`saint e` ≡ `Saint-Étienne`) ; limite à 6.
+- `geoApiCommunes` : mapping de la fixture (`[lon, lat]` → `lat`/`lon`) ; erreur HTTP → rejet.
+- `parseSearch` : `@48.824,2.2628` → nearby ; `@abc` et coordonnées hors bornes → refus.
+- `suggestCommunes` : sortie `{query, suggestions}` et `{query, error}` (faux `CommuneSource`), aucun appel sous 2 lettres.
+
+### 13.9 Hors périmètre
+
+Recherche par adresse ou rue (API Géoplateforme `/geocodage/completion`), suggestions à partir
+d'un code postal partiel, historique des villes récentes. Chacune pourrait s'ajouter plus tard
+par un autre `CommuneSource` ou dans le JSX.

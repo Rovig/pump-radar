@@ -1,0 +1,130 @@
+[
+  {
+    "nom": "Issou",
+    "code": "78314",
+    "codesPostaux": [
+      "78440"
+    ],
+    "codeDepartement": "78",
+    "centre": {
+      "type": "Point",
+      "coordinates": [
+        1.7865,
+        48.9884
+      ]
+    },
+    "population": 4060
+  },
+  {
+    "nom": "Issy-les-Moulineaux",
+    "code": "92040",
+    "codesPostaux": [
+      "92130"
+    ],
+    "codeDepartement": "92",
+    "centre": {
+      "type": "Point",
+      "coordinates": [
+        2.2628,
+        48.824
+      ]
+    },
+    "population": 67669
+  },
+  {
+    "nom": "Issus",
+    "code": "31240",
+    "codesPostaux": [
+      "31450"
+    ],
+    "codeDepartement": "31",
+    "centre": {
+      "type": "Point",
+      "coordinates": [
+        1.5001,
+        43.4232
+      ]
+    },
+    "population": 655
+  },
+  {
+    "nom": "Issel",
+    "code": "11175",
+    "codesPostaux": [
+      "11400"
+    ],
+    "codeDepartement": "11",
+    "centre": {
+      "type": "Point",
+      "coordinates": [
+        2.0012,
+        43.3681
+      ]
+    },
+    "population": 483
+  },
+  {
+    "nom": "Issor",
+    "code": "64276",
+    "codesPostaux": [
+      "64570"
+    ],
+    "codeDepartement": "64",
+    "centre": {
+      "type": "Point",
+      "coordinates": [
+        -0.6566,
+        43.0892
+      ]
+    },
+    "population": 256
+  },
+  {
+    "nom": "Issans",
+    "code": "25316",
+    "codesPostaux": [
+      "25550"
+    ],
+    "codeDepartement": "25",
+    "centre": {
+      "type": "Point",
+      "coordinates": [
+        6.7338,
+        47.5255
+      ]
+    },
+    "population": 239
+  },
+  {
+    "nom": "Issé",
+    "code": "44075",
+    "codesPostaux": [
+      "44520"
+    ],
+    "codeDepartement": "44",
+    "centre": {
+      "type": "Point",
+      "coordinates": [
+        -1.4537,
+        47.6219
+      ]
+    },
+    "population": 1856
+  },
+  {
+    "nom": "Issac",
+    "code": "24211",
+    "codesPostaux": [
+      "24400"
+    ],
+    "codeDepartement": "24",
+    "centre": {
+      "type": "Point",
+      "coordinates": [
+        0.4506,
+        45.0143
+      ]
+    },
+    "population": 437
+  }
+]

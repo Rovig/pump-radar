@@ -21,7 +21,8 @@ Données officielles, mises à jour toutes les 10 minutes, **sans clé API**.
 - **Pastilles** : 🟢 tout est dispo · 🟠 rupture partielle · 🔴 rien de dispo ·
   ⚪ ne vend aucun des carburants suivis.
 - **Prix grisé** : dernière mise à jour il y a plus de 24 h (prix peu fiable).
-- **☰ Recherche** : par code postal (`75013`) ou par ID de station (`75013025`).
+- **☰ Recherche** : par ville avec suggestions (`iss` → Issy-les-Moulineaux), par code postal
+  (`75013`) ou par ID de station (`75013025`).
 
 ## Prérequis
 
@@ -66,7 +67,9 @@ la fiche de la station sur [prix-carburants.gouv.fr](https://www.prix-carburants
 ## Utilisation
 
 - **Rafraîchissement** : automatique toutes les 10 min (rythme du flux officiel).
-- **Recherche** : ☰ → *Rechercher une station ou un code postal* → saisir puis Entrée.
+- **Recherche** : ☰ → *Rechercher une ville, un code postal ou une station* → saisir puis Entrée.
+  - Lettres = ville : des suggestions apparaissent dès 2 lettres (↑/↓ puis Entrée, ou clic) ;
+    le widget affiche les stations dans un rayon de `radiusKm` autour du centre de la commune.
   - 5 chiffres = code postal, 6 à 9 chiffres = ID de station.
   - Le résultat est rafraîchi avec le reste du widget ; ☰ → *Revenir aux stations proches*
     (ou ✕) pour revenir à la vue normale.
@@ -76,6 +79,8 @@ la fiche de la station sur [prix-carburants.gouv.fr](https://www.prix-carburants
   npm start              # vue configurée
   npm start -- 75013     # recherche par code postal
   npm start -- 75013025  # recherche par ID
+  npm start -- @48.824,2.2628   # stations autour d'un point
+  npm start -- suggest iss      # suggestions de communes
   ```
 
 ## Développement
@@ -90,9 +95,9 @@ npm test   # node --test, aucune dépendance à installer
 ```
 bin/essence      lanceur : trouve node ≥ 18, exécute core/main.mjs
 core/main.mjs    point d'entrée : config → adapters → ViewModel JSON sur stdout
-core/app/        cas d'usage (buildDashboard, parseSearch)
+core/app/        cas d'usage (buildDashboard, parseSearch, suggestCommunes)
 core/domain/     modèle Station et règles de disponibilité
-core/adapters/   API prix-carburants, tuiles IGN, position
+core/adapters/   API prix-carburants, API communes, tuiles IGN, position
 index.jsx        widget Übersicht (rendu, menu, recherche)
 ```
 
@@ -102,6 +107,8 @@ Architecture, contrats et choix techniques : voir [DESIGN.md](DESIGN.md).
 
 - **Prix et disponibilités** : [Prix des carburants en France – flux instantané v2](https://data.economie.gouv.fr/explore/dataset/prix-des-carburants-en-france-flux-instantane-v2/),
   data.economie.gouv.fr (Licence Ouverte Etalab 2.0).
+- **Communes** : [API Découpage administratif](https://geo.api.gouv.fr/decoupage-administratif)
+  (geo.api.gouv.fr), sans clé.
 - **Fond de carte** : Plan IGN v2 via la [Géoplateforme](https://geoservices.ign.fr/) — © IGN.
 
 Le jeu de données ne contient pas le nom ou l'enseigne des stations : le widget affiche

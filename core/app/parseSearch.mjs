@@ -1,12 +1,19 @@
 /**
  * Saisie de la barre de recherche → surcharge de config.
- * 5 chiffres = code postal, 6 à 9 chiffres = ID de station (ex. 75013025).
+ * 5 chiffres = code postal, 6 à 9 chiffres = ID de station (ex. 75013025),
+ * `@lat,lon` = stations autour d'un point (commune choisie dans les suggestions).
  * @param {string} text
- * @returns {{ mode: 'postcode', postcode: string } | { mode: 'ids', ids: number[] }}
+ * @returns {{ mode: 'postcode', postcode: string } | { mode: 'ids', ids: number[] }
+ *         | { mode: 'nearby', location: { provider: 'fixed', lat: number, lon: number } }}
  */
 export function parseSearch(text) {
   const q = String(text).trim();
   if (/^\d{5}$/.test(q)) return { mode: 'postcode', postcode: q };
   if (/^\d{6,9}$/.test(q)) return { mode: 'ids', ids: [Number(q)] };
-  throw new Error(`recherche invalide : « ${q} » (code postal à 5 chiffres ou ID de station)`);
+  const at = q.match(/^@(-?\d{1,2}(?:\.\d+)?),(-?\d{1,3}(?:\.\d+)?)$/);
+  if (at) {
+    const [lat, lon] = [Number(at[1]), Number(at[2])];
+    if (Math.abs(lat) <= 90 && Math.abs(lon) <= 180) return { mode: 'nearby', location: { provider: 'fixed', lat, lon } };
+  }
+  throw new Error(`recherche invalide : « ${q} » (code postal à 5 chiffres, ID de station ou @lat,lon)`);
 }
