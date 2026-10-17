@@ -1,0 +1,17 @@
+#!/bin/sh
+# Quitte Übersicht (menu ☰ → Quitter Übersicht). Übersicht ignore l'AppleScript « quit » :
+# on envoie SIGTERM à l'app et à son serveur (zsh localnode → node server.js). Le serveur est
+# détaché de l'app (parent = launchd) : on le retrouve en remontant les ancêtres de ce script,
+# qui tourne sous lui. Un seul `kill` pour tout, avant que notre propre ascendance disparaisse.
+pids=$(lsappinfo info -only pid tracesOf.Uebersicht | cut -d= -f2)
+
+p=$$
+while [ "${p:-1}" -gt 1 ]; do
+  p=$(ps -o ppid= -p "$p" | tr -d ' ')
+  case "$(ps -o args= -p "$p" 2>/dev/null)" in
+    *Contents/Resources/server.js*) pids="$pids $p" ;;
+  esac
+done
+
+[ -n "$pids" ] && kill $pids 2>/dev/null
+exit 0

@@ -5,6 +5,13 @@ import { run } from 'uebersicht';
 import { layoutMap, project, unproject, MIN_ZOOM, MAX_ZOOM } from './core/adapters/ignTiles.mjs';
 
 const CMD = 'essence.widget/bin/essence';
+const WIDGET_ID = 'essence-widget-index-jsx'; // id Übersicht (dérivé du chemin essence.widget/index.jsx)
+
+// Commande AppleScript vers Übersicht lui-même : aucune autorisation d'automatisation requise.
+const ubersicht = (script) => run(`osascript -e 'tell application id "tracesOf.Uebersicht" to ${script}'`).catch(() => {});
+// Masqué, le widget ne tourne plus ; Essence.app (ou le menu d'Übersicht) le ré-affiche.
+const hideWidget = () => ubersicht(`set hidden of widget id "${WIDGET_ID}" to true`);
+const quitUbersicht = () => run('essence.widget/bin/quit-ubersicht').catch(() => {});
 
 // Recherche affichée : relancée à chaque rafraîchissement pour ne pas montrer de données figées.
 let activeSearch = null;
@@ -386,6 +393,15 @@ const Menu = ({ state, dispatch }) => (
         📍 Revenir aux stations proches
       </button>
     )}
+    <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', margin: '4px 0' }} />
+    <button style={{ ...button, display: 'block', width: '100%', textAlign: 'left', padding: '6px 12px' }}
+      title="Masque le widget ; Essence.app le ré-affiche" onClick={hideWidget}>
+      ✕ Fermer le widget
+    </button>
+    <button style={{ ...button, display: 'block', width: '100%', textAlign: 'left', padding: '6px 12px', opacity: 0.8 }}
+      title="Arrête Übersicht et tous ses widgets ; Essence.app le relance" onClick={quitUbersicht}>
+      ⏻ Quitter Übersicht
+    </button>
   </div>
 );
 

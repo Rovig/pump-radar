@@ -87,6 +87,8 @@ la fiche de la station sur [prix-carburants.gouv.fr](https://www.prix-carburants
   stations visibles (au plus `searchLimit`, sans distance). Clic sur une ligne de la liste =
   centrer la carte sur la station et ouvrir sa bulle. Échap ou clic dans le vide ferme la bulle.
   ☰ → *Revenir aux stations proches* remet la vue de départ.
+- **Fermer / quitter** : ☰ → *Fermer le widget* le masque ; ☰ → *Quitter Übersicht* arrête
+  Übersicht (et ses autres widgets). Dans les deux cas, `Essence.app` remet tout en route.
 - **En ligne de commande** (debug) — sortie JSON brute :
 
   ```sh
@@ -114,11 +116,12 @@ clic, ✕, clic dans le vide ou Échap → fermée ; `+`/`−`, molette, double-
 
 ```
 bin/essence      lanceur : trouve node ≥ 18, exécute core/main.mjs
+bin/quit-ubersicht  arrêt d'Übersicht et de son serveur (menu ☰ → Quitter Übersicht)
 Essence.app      lanceur Finder : lien essence.widget + démarrage d'Übersicht (script shell)
+tools/           make-icon.sh : régénère l'icône d'Essence.app (pompe dessinée en Swift/AppKit)
 core/main.mjs    point d'entrée : config → adapters → ViewModel JSON sur stdout
 core/app/        cas d'usage (buildDashboard, parseSearch, suggestCommunes)
 core/domain/     modèle Station et règles de disponibilité
-tools/           make-icon.sh : régénère l'icône d'Essence.app (pompe dessinée en Swift/AppKit)
 core/adapters/   API prix-carburants, API communes, tuiles IGN, position
 index.jsx        widget Übersicht (rendu, carte interactive, bulle, menu, recherche)
 ```
