@@ -272,6 +272,7 @@ Développement dans `~/essence`, puis symlink vers le dossier widgets d'Übersic
 ```sh
 brew install --cask ubersicht
 ln -s ~/essence "$HOME/Library/Application Support/Übersicht/widgets/essence.widget"
+open Essence.app  # ou double-clic dans le Finder : lien + démarrage d'Übersicht + widget ré-affiché
 npm test          # 33 tests, node --test
 npm start         # ViewModel JSON brut (debug)
 npm start -- 75013   # idem pour une recherche (code postal ou ID de station)

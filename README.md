@@ -43,6 +43,12 @@ ln -s ~/pump-radar "$HOME/Library/Application Support/Übersicht/widgets/essence
 > ⚠️ Le lien **doit** s'appeler `essence.widget` : c'est le chemin qu'utilise le widget pour
 > lancer son script (`essence.widget/bin/essence`).
 
+**Ou depuis le Finder** : double-cliquez sur `Essence.app` (dans le dossier du dépôt). Le lanceur
+crée le lien `essence.widget` s'il manque, démarre Übersicht, ré-affiche le widget s'il était masqué
+et le rafraîchit. Pour l'avoir sous la main, glissez-le dans le Dock ou faites-en un alias dans
+`/Applications` (une copie marche aussi, une fois le lien installé). Il ne remplace jamais un
+`essence.widget` existant qui pointe ailleurs.
+
 Le widget apparaît en haut à droite du bureau. S'il reste invisible, vérifiez qu'il est coché
 dans le menu de l'icône Übersicht (barre des menus) ; si Übersicht lui-même ne répond pas,
 quittez-le de force puis relancez-le.
@@ -107,6 +113,7 @@ clic, ✕, clic dans le vide ou Échap → fermée ; `+`/`−`, molette, double-
 
 ```
 bin/essence      lanceur : trouve node ≥ 18, exécute core/main.mjs
+Essence.app      lanceur Finder : lien essence.widget + démarrage d'Übersicht (script shell)
 core/main.mjs    point d'entrée : config → adapters → ViewModel JSON sur stdout
 core/app/        cas d'usage (buildDashboard, parseSearch, suggestCommunes)
 core/domain/     modèle Station et règles de disponibilité

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleName</key>
+	<string>Essence</string>
+	<key>CFBundleDisplayName</key>
+	<string>Essence</string>
+	<key>CFBundleIdentifier</key>
+	<string>io.github.rovig.pump-radar.launcher</string>
+	<key>CFBundleExecutable</key>
+	<string>essence-launcher</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>11.0</string>
+	<!-- Pas d'icône dans le Dock : le lanceur s'exécute puis quitte. -->
+	<key>LSUIElement</key>
+	<true/>
+</dict>
+</plist>

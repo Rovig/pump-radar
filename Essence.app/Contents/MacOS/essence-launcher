@@ -1,0 +1,46 @@
+#!/bin/sh
+# Lanceur Finder du widget : double-clic sur Essence.app.
+# Installe le lien essence.widget si besoin, démarre Übersicht, ré-affiche le widget et le rafraîchit.
+# Ne remplace jamais un essence.widget existant qui pointe ailleurs.
+
+app=$(cd "$(dirname "$0")/../.." && pwd)
+repo=$(dirname "$app")
+widgets="$HOME/Library/Application Support/Übersicht/widgets"
+link="$widgets/essence.widget"
+widget_id='essence-widget-index-jsx'
+
+alert() {
+  osascript -e 'on run argv' -e 'display alert "Essence" message (item 1 of argv) as critical' -e 'end run' "$1" >/dev/null
+  exit 1
+}
+
+open -Ra Übersicht 2>/dev/null ||
+  alert "Übersicht n'est pas installé. Installez-le puis relancez Essence :
+
+brew install --cask ubersicht"
+
+if [ ! -f "$repo/index.jsx" ]; then
+  # App copiée hors du dépôt (ex. /Applications) : on se contente du lien déjà installé.
+  [ -f "$link/index.jsx" ] ||
+    alert "Widget introuvable. Lancez Essence.app depuis le dossier du widget (ou un alias de celle-ci) pour installer le lien $link."
+elif [ -L "$link" ] || [ -e "$link" ]; then
+  [ "$(cd "$link" 2>/dev/null && pwd -P)" = "$(cd "$repo" && pwd -P)" ] ||
+    alert "$link existe déjà mais ne pointe pas vers $repo. Supprimez-le ou corrigez-le, puis relancez Essence."
+else
+  mkdir -p "$widgets" && ln -s "$repo" "$link" || alert "Impossible de créer le lien $link."
+fi
+
+open -b tracesOf.Uebersicht || alert "Impossible de démarrer Übersicht."
+
+# Übersicht met quelques secondes à scanner ses widgets au premier démarrage.
+i=0
+until osascript -e "tell application id \"tracesOf.Uebersicht\" to get id of widget id \"$widget_id\"" >/dev/null 2>&1; do
+  i=$((i + 1))
+  [ "$i" -ge 20 ] && alert "Übersicht est démarré mais ne trouve pas le widget Essence. Vérifiez le dossier des widgets dans ses préférences."
+  sleep 0.5
+done
+
+osascript -e "tell application id \"tracesOf.Uebersicht\"
+  set hidden of widget id \"$widget_id\" to false
+  refresh widget id \"$widget_id\"
+end tell" >/dev/null
