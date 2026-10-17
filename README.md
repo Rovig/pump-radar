@@ -45,7 +45,8 @@ ln -s ~/pump-radar "$HOME/Library/Application Support/Übersicht/widgets/essence
 
 **Ou depuis le Finder** : double-cliquez sur `Essence.app` (dans le dossier du dépôt). Le lanceur
 crée le lien `essence.widget` s'il manque, démarre Übersicht, ré-affiche le widget s'il était masqué
-et le rafraîchit. Pour l'avoir sous la main, glissez-le dans le Dock ou faites-en un alias dans
+et le rafraîchit, puis affiche une notification (chaque lancement est noté dans
+`~/Library/Logs/Essence.log`). Pour l'avoir sous la main, glissez-le dans le Dock ou faites-en un alias dans
 `/Applications` (une copie marche aussi, une fois le lien installé). Il ne remplace jamais un
 `essence.widget` existant qui pointe ailleurs.
 
@@ -117,6 +118,7 @@ Essence.app      lanceur Finder : lien essence.widget + démarrage d'Übersicht 
 core/main.mjs    point d'entrée : config → adapters → ViewModel JSON sur stdout
 core/app/        cas d'usage (buildDashboard, parseSearch, suggestCommunes)
 core/domain/     modèle Station et règles de disponibilité
+tools/           make-icon.sh : régénère l'icône d'Essence.app (pompe dessinée en Swift/AppKit)
 core/adapters/   API prix-carburants, API communes, tuiles IGN, position
 index.jsx        widget Übersicht (rendu, carte interactive, bulle, menu, recherche)
 ```

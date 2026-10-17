@@ -8,6 +8,8 @@
 	<string>Essence</string>
 	<key>CFBundleIdentifier</key>
 	<string>io.github.rovig.pump-radar.launcher</string>
+	<key>CFBundleIconFile</key>
+	<string>Essence</string>
 	<key>CFBundleExecutable</key>
 	<string>essence-launcher</string>
 	<key>CFBundlePackageType</key>

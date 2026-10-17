@@ -2,17 +2,30 @@
 # Lanceur Finder du widget : double-clic sur Essence.app.
 # Installe le lien essence.widget si besoin, démarre Übersicht, ré-affiche le widget et le rafraîchit.
 # Ne remplace jamais un essence.widget existant qui pointe ailleurs.
+# Chaque lancement est tracé dans ~/Library/Logs/Essence.log et se termine par une notification.
 
 app=$(cd "$(dirname "$0")/../.." && pwd)
 repo=$(dirname "$app")
 widgets="$HOME/Library/Application Support/Übersicht/widgets"
 link="$widgets/essence.widget"
 widget_id='essence-widget-index-jsx'
+logfile="$HOME/Library/Logs/Essence.log"
+
+log() {
+  mkdir -p "$(dirname "$logfile")" && printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$1" >>"$logfile"
+}
+
+notify() {
+  osascript -e 'on run argv' -e 'display notification (item 1 of argv) with title "⛽ Essence"' -e 'end run' "$1" >/dev/null 2>&1
+}
 
 alert() {
+  log "erreur : $1"
   osascript -e 'on run argv' -e 'display alert "Essence" message (item 1 of argv) as critical' -e 'end run' "$1" >/dev/null
   exit 1
 }
+
+log "lancement depuis $app"
 
 open -Ra Übersicht 2>/dev/null ||
   alert "Übersicht n'est pas installé. Installez-le puis relancez Essence :
@@ -43,4 +56,7 @@ done
 osascript -e "tell application id \"tracesOf.Uebersicht\"
   set hidden of widget id \"$widget_id\" to false
   refresh widget id \"$widget_id\"
-end tell" >/dev/null
+end tell" >/dev/null || alert "Übersicht n'a pas pu afficher le widget."
+
+log "widget affiché"
+notify "Widget affiché en haut à droite du bureau."
