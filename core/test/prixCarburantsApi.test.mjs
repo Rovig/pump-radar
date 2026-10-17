@@ -9,6 +9,7 @@ test('toStation mappe un enregistrement réel', () => {
   const s = toStation(fixture.results[0]);
   assert.equal(s.id, 75012010);
   assert.equal(s.city, 'Paris');
+  assert.equal(s.postcode, '75012');
   assert.deepEqual([s.lat, s.lon], [48.842, 2.373]);
   const byFuel = Object.fromEntries(s.fuels.map((f) => [f.fuel, f]));
   assert.equal(byFuel.SP98.state, 'ok');

@@ -10,7 +10,7 @@
 /** @typedef {{ fuel: Fuel, state: FuelState, price: number|null, updatedAt: string|null }} FuelStatus */
 
 /**
- * @typedef {{ id: number, address: string, city: string,
+ * @typedef {{ id: number, address: string, city: string, postcode: string,
  *             lat: number|null, lon: number|null, distanceM: number|null,
  *             fuels: FuelStatus[] }} Station
  */

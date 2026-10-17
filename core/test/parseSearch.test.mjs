@@ -12,6 +12,11 @@ test('@lat,lon = stations autour d’un point', () => {
   assert.deepEqual(parseSearch('@-21.1,55.5').location, { provider: 'fixed', lat: -21.1, lon: 55.5 });
 });
 
+test('@lat,lon,z = vue de la carte (mode area), zoom borné', () => {
+  assert.deepEqual(parseSearch('@48.82400,2.26280,15'), { mode: 'area', location: { provider: 'fixed', lat: 48.824, lon: 2.2628 }, zoom: 15 });
+  for (const q of ['@48.8,2.3,5', '@48.8,2.3,19', '@48.8,2.3,']) assert.throws(() => parseSearch(q), /recherche invalide/);
+});
+
 test('toute autre saisie est refusée', () => {
   for (const q of ['', '7501', 'abc', '75013;rm', '1234567890', '@abc', '@95,2', '@48.8,2.3;ls', 'issy']) assert.throws(() => parseSearch(q), /recherche invalide/);
 });

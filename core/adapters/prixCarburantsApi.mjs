@@ -37,6 +37,7 @@ export function toStation(r) {
     id: r.id,
     address: r.adresse ?? '',
     city: r.ville ?? '',
+    postcode: r.cp ?? '',
     lat: r.geom?.lat ?? null,
     lon: r.geom?.lon ?? null,
     distanceM: r.d ?? null,

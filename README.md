@@ -21,6 +21,9 @@ Données officielles, mises à jour toutes les 10 minutes, **sans clé API**.
 - **Pastilles** : 🟢 tout est dispo · 🟠 rupture partielle · 🔴 rien de dispo ·
   ⚪ ne vend aucun des carburants suivis.
 - **Prix grisé** : dernière mise à jour il y a plus de 24 h (prix peu fiable).
+- **Carte interactive** : glisser pour explorer (les stations de la zone se rechargent),
+  `+` / `−`, molette ou double-clic pour zoomer, clic sur une pastille pour ouvrir sa **bulle**
+  (tous les carburants vendus, prix et âge, lien *Itinéraire* vers Plans).
 - **☰ Recherche** : par ville avec suggestions (`iss` → Issy-les-Moulineaux), par code postal
   (`75013`) ou par ID de station (`75013025`).
 
@@ -73,6 +76,10 @@ la fiche de la station sur [prix-carburants.gouv.fr](https://www.prix-carburants
   - 5 chiffres = code postal, 6 à 9 chiffres = ID de station.
   - Le résultat est rafraîchi avec le reste du widget ; ☰ → *Revenir aux stations proches*
     (ou ✕) pour revenir à la vue normale.
+- **Carte** : après un déplacement ou un zoom, l'en-tête affiche *Carte* et la liste montre les
+  stations visibles (au plus `searchLimit`, sans distance). Clic sur une ligne de la liste =
+  centrer la carte sur la station et ouvrir sa bulle. Échap ou clic dans le vide ferme la bulle.
+  ☰ → *Revenir aux stations proches* remet la vue de départ.
 - **En ligne de commande** (debug) — sortie JSON brute :
 
   ```sh
@@ -80,6 +87,7 @@ la fiche de la station sur [prix-carburants.gouv.fr](https://www.prix-carburants
   npm start -- 75013     # recherche par code postal
   npm start -- 75013025  # recherche par ID
   npm start -- @48.824,2.2628   # stations autour d'un point
+  npm start -- @48.824,2.2628,15   # stations visibles dans cette vue de carte (zoom 6 à 18)
   npm start -- suggest iss      # suggestions de communes
   ```
 
@@ -88,6 +96,11 @@ la fiche de la station sur [prix-carburants.gouv.fr](https://www.prix-carburants
 ```sh
 npm test   # node --test, aucune dépendance à installer
 ```
+
+**Recette manuelle de la carte** (non couverte par `npm test`) : glisser → la carte suit puis les
+pastilles se rechargent (petit spinner en haut à gauche) ; clic sur une pastille → bulle ; second
+clic, ✕, clic dans le vide ou Échap → fermée ; `+`/`−`, molette, double-clic → zoom ; *Itinéraire*
+→ Plans s'ouvre ; ☰ → *Revenir aux stations proches*.
 
 Übersicht recharge le widget à chaque modification de fichier. Toute la logique vit dans
 `core/` (Node pur, testable sans Übersicht) ; `index.jsx` ne fait qu'afficher le JSON produit.
@@ -98,7 +111,7 @@ core/main.mjs    point d'entrée : config → adapters → ViewModel JSON sur st
 core/app/        cas d'usage (buildDashboard, parseSearch, suggestCommunes)
 core/domain/     modèle Station et règles de disponibilité
 core/adapters/   API prix-carburants, API communes, tuiles IGN, position
-index.jsx        widget Übersicht (rendu, menu, recherche)
+index.jsx        widget Übersicht (rendu, carte interactive, bulle, menu, recherche)
 ```
 
 Architecture, contrats et choix techniques : voir [DESIGN.md](DESIGN.md).

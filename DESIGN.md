@@ -140,8 +140,9 @@ stdout. Le `.jsx` ne fait qu'afficher. Une seule frontière, un seul format.
 (`config.fuels`) : `ok` (tous dispo) · `partial` (au moins un en rupture) · `empty` (aucun dispo)
 · `none` (ne vend aucun carburant suivi → gris, pas rouge).
 
-Le **projeté pixel** (tuiles + marqueurs) est calculé côté core, pas dans le JSX :
-le rendu reste bête, et les maths sont testées en Node.
+Le **projeté pixel** (tuiles + marqueurs) vient de `ignTiles.mjs`, module pur testé en Node et
+importé par le JSX depuis la carte interactive (§14) : `map` ne contient plus que `zoom`, `width`,
+`height`, et chaque station porte `lat`/`lon`, `address`, `postcode`, `city` et `allFuels`.
 
 ---
 
@@ -271,7 +272,7 @@ Développement dans `~/essence`, puis symlink vers le dossier widgets d'Übersic
 ```sh
 brew install --cask ubersicht
 ln -s ~/essence "$HOME/Library/Application Support/Übersicht/widgets/essence.widget"
-npm test          # 27 tests, node --test
+npm test          # 33 tests, node --test
 npm start         # ViewModel JSON brut (debug)
 npm start -- 75013   # idem pour une recherche (code postal ou ID de station)
 ```
@@ -407,3 +408,158 @@ core/test/fixtures/communes-iss.json  réponse réelle figée
 Recherche par adresse ou rue (API Géoplateforme `/geocodage/completion`), suggestions à partir
 d'un code postal partiel, historique des villes récentes. Chacune pourrait s'ajouter plus tard
 par un autre `CommuneSource` ou dans le JSX.
+
+---
+
+## 14. Carte interactive : déplacement, zoom, bulle d'info (implémentée le 17/10/2026)
+
+**Besoin** : faire glisser la carte pour explorer, voir les stations de la zone visitée, et
+cliquer sur une pastille pour ouvrir une bulle avec le détail de la station. Cela revient sur
+deux choix de la v1 : « carte non interactive » (§2) et « carte interactive hors périmètre » (§12).
+
+### 14.1 Choix
+
+| Question | Retenu | Écarté (pourquoi) |
+|---|---|---|
+| Moteur de carte | **Toujours pas de Leaflet**. On garde la grille de tuiles maison et on ajoute le glisser, le zoom et le clic (~80 lignes). | Leaflet : CSS et JS à charger depuis un CDN ou à embarquer (dépendance, pas de build dans Übersicht), styles qui se mêlent à ceux du widget, alors qu'il ne faut que 3 gestes. |
+| Où calculer tuiles et marqueurs | **Dans le JSX**, avec `layoutMap` / `project` **importés** de `core/adapters/ignTiles.mjs` (pur, déjà testé). Le core garde le calcul du cadrage initial (`center`, `fitZoom`). | Tout garder dans le core : chaque glissement demanderait un aller-retour node + API (≥ 0,5 s), donc une carte qui saccade. Dupliquer les maths dans le JSX : deux copies à maintenir. |
+| Stations d'une zone visitée | **Recharger au relâchement** (après 400 ms d'inactivité) avec une recherche `@lat,lon,z` dans le mode `area` (§14.3). | Recharger pendant le glissement : trop d'appels. Ne rien recharger : la carte se déplace mais reste vide hors de la zone de départ. |
+| Glissement fluide | Pendant le glissement, on applique un **`transform` CSS via une ref**, sans `dispatch`. Au relâchement, un seul `dispatch` recalcule la grille. | Un `dispatch` par `mousemove` : tout le widget est re-rendu 60 fois par seconde. |
+
+Changement de principe (§4) : « le projeté pixel est calculé côté core » devient « le projeté
+pixel vient d'un module **pur et partagé** (`ignTiles.mjs`), testé en Node, exécuté par le JSX ».
+Le JSX n'a toujours aucune logique métier ; il ne fait que **placer** des éléments.
+
+### 14.2 Interactions
+
+```
+┌──────────────────────────────────────────────┐
+│ ☰ ⛽ Essence                  Carte · MAJ 13:02│
+│ ┌──────────────────────────────────────────┐ │
+│ │        ┌─────────────────────────────┐ + │ │
+│ │        │ 18-22 Bd des Frères Voisin ✕│ − │ │
+│ │        │ 92130 Issy-les-Moulineaux   │   │ │
+│ │        │ ● SP98   2.374 €   il y a 2 h│   │ │
+│ │        │ ● E10    2.227 €   il y a 2 h│   │ │
+│ │        │ ● Gazole rupture            │   │ │
+│ │        │ #92130003      Itinéraire ↗ │   │ │
+│ │        └──────────────▽──────────────┘   │ │
+│ │                       ●        ●     ◌   │ │  ◌ = rechargement en cours
+│ └──────────────────────────────────────────┘ │
+│ ■ 18-22 Bd des Frères Voisin, Issy  #92130003│  ← ligne de la station ouverte surlignée
+└──────────────────────────────────────────────┘
+```
+
+| Geste | Effet |
+|---|---|
+| Glisser la carte | Déplace la vue. Au relâchement : rechargement des stations de la zone. |
+| `+` / `−`, molette, double-clic | Zoom (bornes 6 à 18). Le double-clic zoome sur le point cliqué. Rechargement ensuite. |
+| Clic sur une pastille | Ouvre la bulle (une seule à la fois). Un nouveau clic, ✕, un clic dans le vide ou Échap la ferment. |
+| Clic sur une ligne de la liste | Centre la carte sur la station et ouvre sa bulle (sans recharger si elle est déjà visible). |
+| ☰ → *Revenir aux stations proches* | Remet la vue de départ (comportement actuel). |
+
+Pour distinguer **clic et glissement** : un déplacement de moins de 4 px entre `pointerdown` et
+`pointerup` compte comme un clic. On utilise `setPointerCapture` pour suivre la souris même
+hors de la carte, `draggable={false}` sur les tuiles et `user-select: none`.
+
+Placement de la bulle : au-dessus de la pastille, ou **en dessous** si elle n'a pas la place.
+Elle est décalée horizontalement pour rester dans le cadre de 360 px. Elle suit la carte
+pendant le glissement (même calque que les marqueurs).
+
+**Itinéraire** : `run('open "maps://?daddr=<lat>,<lon>"')`, qui ouvre Plans. On n'utilise que
+des nombres formatés (`toFixed(5)`), jamais de texte.
+
+### 14.3 Contrats
+
+**Recherche** : `parseSearch` accepte un zoom en option. `@lat,lon` (commune) ne change pas.
+
+```js
+'@48.82400,2.26280'      → { mode: 'nearby', location }                 // inchangé (§13)
+'@48.82400,2.26280,15'   → { mode: 'area', location, zoom: 15 }         // vue de la carte
+```
+
+**Mode `area`** dans `buildDashboard` :
+
+- `stations.nearby(center, radiusKm, searchLimit)`, avec `radiusKm` = demi-diagonale du
+  cadre au zoom demandé (au moins 0,5 km), calculée par `viewRadiusKm({ center, zoom, width, height })`
+  dans `ignTiles.mjs`. On ne charge donc que les stations visibles, au plus `searchLimit` (20).
+- Le centre et le zoom viennent de la recherche : **pas de `fitZoom`**, la carte ne doit pas
+  « sauter » après un rechargement.
+- `distanceKm` = `null` : la distance au centre de la vue n'a pas de sens. La ligne affiche alors
+  seulement `#id`.
+- On ne modifie pas `StationSource`.
+
+**ViewModel** : ajouts, sans rien casser.
+
+```jsonc
+"map": { "zoom": 15, "width": 360, "height": 220 },   // tiles/markers retirés : calculés par le JSX
+"stations": [{
+  "id": 92130003, "label": "…", "distanceKm": null, "level": "ok", "fuels": [/* suivis, inchangé */],
+  "lat": 48.8301, "lon": 2.2611,                       // nouveau : placement + itinéraire
+  "address": "18-22 Bd des Frères Voisin", "postcode": "92130", "city": "Issy-les-Moulineaux",
+  "allFuels": [                                         // nouveau : tous les carburants vendus (state ≠ absent)
+    { "fuel": "Gazole", "state": "rupture", "price": null, "ageMin": null, "tracked": false }
+  ]
+}]
+```
+
+Domaine : `Station` gagne `postcode` (champ `cp` de l'API, déjà disponible mais ignoré
+jusqu'ici). Les stations sans coordonnées restent dans la liste, sans pastille ni bulle.
+
+**`ignTiles.mjs`** : on ajoute `unproject(x, y, z) → {lat, lon}` (centre de la vue après un
+glissement) et `viewRadiusKm`. `layoutMap` accepte `margin` (px, par défaut 0) pour poser une
+**couronne de tuiles hors cadre** : 256 px pendant le glissement, pour qu'aucun bord gris
+n'apparaisse avant le relâchement.
+
+### 14.4 État du widget (`index.jsx`)
+
+```js
+view:   { center: {lat, lon}, zoom } | null   // null = suivre le ViewModel ; sinon vue choisie par l'utilisateur
+popup:  number | null                         // id de la station ouverte
+```
+
+- Rendu de la carte : `layoutMap({ center: view?.center ?? vm.center, zoom: view?.zoom ?? vm.map.zoom,
+  …, margin: 256, points: vm.stations })`.
+- Au relâchement ou au zoom : `VIEW_SET`, puis après 400 ms `submitSearch('@lat,lon,z', 'Carte')`.
+  On réutilise ainsi `activeSearch`, la garde contre les réponses périmées et le rafraîchissement
+  toutes les 10 min.
+- Pendant le rechargement, **pas de voile plein cadre** comme dans `Loader` : un petit spinner
+  dans un coin, et la carte reste manipulable.
+- La bulle reste ouverte après un rechargement si la station est encore dans les résultats ;
+  sinon elle se ferme.
+
+### 14.5 Fichiers
+
+```
+core/adapters/ignTiles.mjs       + unproject, viewRadiusKm, option margin de layoutMap
+core/adapters/prixCarburantsApi  + postcode dans toStation
+core/app/parseSearch.mjs         + forme @lat,lon,z → mode area
+core/app/buildDashboard.mjs      + mode area ; lignes enrichies (lat, lon, address, postcode, city, allFuels)
+index.jsx                        MapView interactive (pointer events, zoom, ref de glissement), Popup, état view/popup
+```
+
+### 14.6 Tests
+
+- `ignTiles` : `unproject(project(p)) ≈ p` ; `viewRadiusKm` à z15 sur 360×220 ≈ 0,66 km à
+  Paris ; `margin` ajoute la couronne de tuiles attendue.
+- `parseSearch` : `@lat,lon,z` → `area` ; zoom hors de 6 à 18 → refus ; `@lat,lon` toujours `nearby`.
+- `buildDashboard` en mode `area` : centre et zoom conservés (pas de `fitZoom`), rayon calculé
+  passé à `nearby`, `limit = searchLimit`, `distanceKm` à `null`.
+- `buildDashboard` : `allFuels` exclut les `absent` et marque `tracked` ; `lat`/`lon`/`postcode` présents.
+- **Non couvert par les tests automatiques** : les gestes dans Übersicht (glisser, clic ou glissement,
+  molette, bulle). C'est une recette manuelle, listée dans le README.
+
+### 14.7 Risques à lever en premier
+
+1. **Import d'un `.mjs` par le JSX** : Übersicht compile le widget avec browserify + babelify.
+   ✅ Vérifié le 17/10/2026 : `./core/adapters/ignTiles.mjs` est bien transpilé dans le bundle.
+2. **Pointer events dans le calque bureau d'Übersicht** : les clics marchent déjà (menu,
+   recherche). Le glissement et la molette sont à vérifier à la main dès la première étape.
+3. **Charge de tuiles IGN** : un glissement charge au plus une couronne (~12 tuiles), bien
+   en dessous des limites de la Géoplateforme (§9.6). On ne précharge rien d'autre.
+
+### 14.8 Hors périmètre
+
+Distance depuis le domicile en mode `area`, regroupement des pastilles proches aux petits zooms,
+inertie du glissement, gestes trackpad (pincer pour zoomer), recentrage automatique sur la
+position courante.

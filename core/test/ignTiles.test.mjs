@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { project, layoutMap, fitZoom } from '../adapters/ignTiles.mjs';
+import { project, unproject, viewRadiusKm, layoutMap, fitZoom } from '../adapters/ignTiles.mjs';
 
 test('project : origine (0,0) au centre du monde au zoom 0', () => {
   const p = project(0, 0, 0);
@@ -35,4 +35,27 @@ test('fitZoom : réduit le zoom jusqu’à cadrer tous les points', () => {
   const z = fitZoom({ center, points: far, width: 360, height: 220, maxZoom: 15 });
   assert.ok(z < 15);
   assert.equal(layoutMap({ center, zoom: z, width: 360, height: 220, points: far.map((p) => ({ ...p, id: 1, level: 'ok' })) }).markers.length, 1);
+});
+
+test('unproject inverse project', () => {
+  const p = project(48.8566, 2.3522, 15);
+  const back = unproject(p.x, p.y, 15);
+  assert.ok(Math.abs(back.lat - 48.8566) < 1e-9 && Math.abs(back.lon - 2.3522) < 1e-9);
+});
+
+test('viewRadiusKm : demi-diagonale 360×220 à z15 sur Paris ≈ 0,66 km', () => {
+  const r = viewRadiusKm({ center: { lat: 48.8566, lon: 2.3522 }, zoom: 15, width: 360, height: 220 });
+  assert.ok(Math.abs(r - 0.663) < 0.005, `r = ${r}`);
+});
+
+test('layoutMap : margin ajoute une couronne de tuiles et garde les marqueurs proches du cadre', () => {
+  const center = { lat: 48.8566, lon: 2.3522 };
+  const base = { center, zoom: 14, width: 360, height: 220 };
+  const out = { id: 2, lat: 48.8566, lon: 2.3522 + 0.02, level: 'ok' }; // ~370 px à droite : hors cadre
+  const plain = layoutMap({ ...base, points: [out] });
+  const wide = layoutMap({ ...base, points: [out], margin: 256 });
+  assert.equal(plain.markers.length, 0);
+  assert.equal(wide.markers.length, 1);
+  assert.ok(wide.tiles.length > plain.tiles.length);
+  for (const t of wide.tiles) assert.ok(t.left < 360 + 256 && t.left + 256 > -256 && t.top < 220 + 256 && t.top + 256 > -256);
 });

@@ -1,5 +1,5 @@
 import { trackedFuels, levelOf } from '../domain/availability.mjs';
-import { layoutMap, fitZoom } from '../adapters/ignTiles.mjs';
+import { fitZoom, viewRadiusKm } from '../adapters/ignTiles.mjs';
 
 const mid = (xs) => (Math.min(...xs) + Math.max(...xs)) / 2;
 
@@ -13,6 +13,8 @@ const located = (p) => Number.isFinite(p.lat) && Number.isFinite(p.lon);
 
 const ageMinutes = (iso, now) => (iso ? Math.round((now - Date.parse(iso)) / 60_000) : null);
 
+const fuelView = (f, now) => ({ fuel: f.fuel, state: f.state, price: f.price, ageMin: ageMinutes(f.updatedAt, now) });
+
 /**
  * Use case : config + ports → ViewModel prêt à afficher.
  * @param {object} config
@@ -23,12 +25,18 @@ const ageMinutes = (iso, now) => (iso ? Math.round((now - Date.parse(iso)) / 60_
 export async function buildDashboard(config, { stations, location, now = Date.now }) {
   const byIds = config.mode === 'ids';
   const byPostcode = config.mode === 'postcode';
+  const byArea = config.mode === 'area'; // vue de la carte choisie à la main : centre et zoom imposés
   const position = await location.current();
+  const { width, height, zoom: maxZoom } = config.map;
+  const searchLimit = config.searchLimit ?? config.limit;
   let found;
   let total = null; // connu seulement pour une recherche par CP (peut dépasser ce qui est affiché)
   if (byIds) found = await stations.byIds(config.ids);
-  else if (byPostcode) ({ stations: found, total } = await stations.byPostcode(config.postcode, config.searchLimit ?? config.limit));
-  else found = await stations.nearby(position, config.radiusKm, config.limit);
+  else if (byPostcode) ({ stations: found, total } = await stations.byPostcode(config.postcode, searchLimit));
+  else if (byArea) {
+    const radiusKm = Math.max(0.5, viewRadiusKm({ center: position, zoom: config.zoom, width, height }));
+    found = await stations.nearby(position, radiusKm, searchLimit);
+  } else found = await stations.nearby(position, config.radiusKm, config.limit);
 
   const t = now();
   const rows = found.map((s) => {
@@ -36,11 +44,17 @@ export async function buildDashboard(config, { stations, location, now = Date.no
     return {
       id: s.id,
       label: `${s.address}, ${s.city}`,
+      address: s.address,
+      postcode: s.postcode ?? '',
+      city: s.city,
       lat: s.lat,
       lon: s.lon,
-      distanceKm: s.distanceM == null ? null : Math.round(s.distanceM / 100) / 10,
+      // En mode area, la distance au centre de la vue ne veut rien dire.
+      distanceKm: byArea || s.distanceM == null ? null : Math.round(s.distanceM / 100) / 10,
       level: levelOf(fuels),
-      fuels: fuels.map((f) => ({ fuel: f.fuel, state: f.state, price: f.price, ageMin: ageMinutes(f.updatedAt, t) })),
+      fuels: fuels.map((f) => fuelView(f, t)),
+      // Bulle d'info : tous les carburants vendus, suivis ou non.
+      allFuels: s.fuels.filter((f) => f.state !== 'absent').map((f) => ({ ...fuelView(f, t), tracked: config.fuels.includes(f.fuel) })),
     };
   });
 
@@ -48,15 +62,14 @@ export async function buildDashboard(config, { stations, location, now = Date.no
   const onMap = rows.filter(located);
   const center = byIds || byPostcode ? centerOf(onMap, position) : position;
   const foundIds = new Set(found.map((s) => s.id));
-
-  const { width, height, zoom: maxZoom } = config.map;
-  const zoom = fitZoom({ center, points: onMap, width, height, maxZoom });
+  const zoom = byArea ? config.zoom : fitZoom({ center, points: onMap, width, height, maxZoom });
 
   return {
     generatedAt: new Date(t).toISOString(),
     center,
-    map: layoutMap({ center, zoom, width, height, points: onMap }),
-    stations: rows.map(({ lat, lon, ...row }) => row),
+    // Tuiles et marqueurs sont posés par le widget (layoutMap), pour pouvoir déplacer la carte sans node.
+    map: { zoom, width, height },
+    stations: rows,
     missingIds: byIds ? config.ids.filter((id) => !foundIds.has(id)) : [],
     total,
     error: null,
